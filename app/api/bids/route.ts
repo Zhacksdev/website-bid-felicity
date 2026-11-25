@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
+import { unstable_noStore as noStore } from 'next/cache'
 import { createServerSupabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
 // GET /api/bids?ids=id1,id2,id3
 export async function GET(request: Request) {
+  noStore()
   const { searchParams } = new URL(request.url)
   const ids = searchParams.get('ids')?.split(',').filter(Boolean) ?? []
 

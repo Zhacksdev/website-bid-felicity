@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { unstable_noStore as noStore } from 'next/cache'
 import { createServerSupabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -8,6 +9,7 @@ function isAdmin(request: Request) {
 }
 
 export async function GET() {
+  noStore()
   const db = createServerSupabase()
   const { data, error } = await db
     .from('auction_config')
@@ -20,6 +22,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  noStore()
   if (!isAdmin(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -27,7 +30,6 @@ export async function PUT(request: Request) {
   const body = await request.json()
   const db = createServerSupabase()
 
-  // Upsert — works even if anon role has INSERT but not UPDATE
   const { data, error } = await db
     .from('auction_config')
     .upsert({ id: 1, ...body }, { onConflict: 'id' })

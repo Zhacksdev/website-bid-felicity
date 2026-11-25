@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { unstable_noStore as noStore } from 'next/cache'
 import { createServerSupabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -8,6 +9,7 @@ function isAdmin(request: Request) {
 }
 
 export async function GET() {
+  noStore()
   const db = createServerSupabase()
   const { data, error } = await db
     .from('artworks')

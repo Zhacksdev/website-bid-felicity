@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { unstable_noStore as noStore } from 'next/cache'
 import { createServerSupabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -11,6 +12,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  noStore()
   if (!isAdmin(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
