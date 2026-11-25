@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Artwork, AuctionConfig } from '@/lib/types'
 import { formatRp, parseRp, displayRp } from '@/lib/format'
@@ -55,7 +55,11 @@ export default function AdminPanel() {
   const [tab, setTab]           = useState<'artworks' | 'timer'>('artworks')
 
   // Artwork form
-  const [form, setForm]         = useState({ title: '', description: '', image_url: '', starting_price: '' })
+  const [form, setForm]         = useState({ title: '', description: '', starting_price: '' })
+  const [imageFile, setImageFile]     = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState('')
+  const [uploadPct, setUploadPct]     = useState(0)
+  const fileInputRef              = useRef<HTMLInputElement>(null)
   const [fMsg, setFMsg]         = useState({ err: '', ok: '' })
   const [fBusy, setFBusy]       = useState(false)
 
@@ -106,6 +110,24 @@ export default function AdminPanel() {
       headers: { 'Content-Type': 'application/json', 'x-admin-token': token!, ...(opts.headers ?? {}) },
     })
 
+  // ── File select ──
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      setFMsg({ err: 'Ukuran gambar maksimal 10MB', ok: '' }); return
+    }
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+    setFMsg({ err: '', ok: '' })
+  }
+
+  const clearImage = () => {
+    setImageFile(null)
+    setImagePreview('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   // ── Add artwork ──
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -115,19 +137,44 @@ export default function AdminPanel() {
     if (!price)             return setFMsg({ err: 'Harga awal wajib diisi', ok: '' })
 
     setFBusy(true)
+    setUploadPct(0)
+
+    // Upload gambar ke Supabase Storage
+    let image_url = ''
+    if (imageFile) {
+      setUploadPct(10)
+      const ext  = imageFile.name.split('.').pop() ?? 'jpg'
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+
+      const { error: upErr } = await supabase.storage
+        .from('artworks')
+        .upload(path, imageFile, { cacheControl: '3600', upsert: false })
+
+      if (upErr) {
+        setFMsg({ err: 'Gagal upload gambar: ' + upErr.message, ok: '' })
+        setFBusy(false); setUploadPct(0); return
+      }
+
+      setUploadPct(80)
+      const { data: { publicUrl } } = supabase.storage.from('artworks').getPublicUrl(path)
+      image_url = publicUrl
+      setUploadPct(100)
+    }
+
     const res  = await adminFetch('/api/artworks', {
       method: 'POST',
-      body: JSON.stringify({ ...form, starting_price: price }),
+      body: JSON.stringify({ ...form, image_url, starting_price: price }),
     })
     const data = await res.json()
     if (res.ok) {
-      setForm({ title: '', description: '', image_url: '', starting_price: '' })
+      setForm({ title: '', description: '', starting_price: '' })
+      clearImage()
       setFMsg({ err: '', ok: 'Karya berhasil ditambahkan!' })
       setTimeout(() => setFMsg({ err: '', ok: '' }), 3000)
     } else {
       setFMsg({ err: data.error ?? 'Gagal', ok: '' })
     }
-    setFBusy(false)
+    setFBusy(false); setUploadPct(0)
   }
 
   const toggleActive = (art: Artwork) =>
@@ -224,8 +271,65 @@ export default function AdminPanel() {
                     <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="field h-20 resize-none" placeholder="Deskripsi singkat..." />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-cream/55 text-xs font-cinzel tracking-widest mb-1.5">URL GAMBAR</label>
-                    <input type="url" value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} className="field" placeholder="https://..." />
+                    <label className="block text-cream/55 text-xs font-cinzel tracking-widest mb-1.5">GAMBAR KARYA</label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+                    {imagePreview ? (
+                      <div className="relative rounded-lg overflow-hidden border border-gold-500/30 group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={imagePreview} alt="preview" className="w-full max-h-56 object-contain bg-crimson-900" />
+                        <div className="absolute inset-0 bg-crimson-950/0 group-hover:bg-crimson-950/50 transition-all flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="btn-gold text-xs py-1.5 px-3"
+                          >
+                            GANTI
+                          </button>
+                          <button
+                            type="button"
+                            onClick={clearImage}
+                            className="btn-danger"
+                          >
+                            HAPUS
+                          </button>
+                        </div>
+                        <div className="absolute bottom-0 left-0 right-0 bg-crimson-950/70 px-3 py-1.5 flex items-center justify-between">
+                          <span className="text-cream/60 text-xs truncate">{imageFile?.name}</span>
+                          <span className="text-cream/40 text-xs flex-shrink-0 ml-2">
+                            {imageFile ? (imageFile.size / 1024 < 1024
+                              ? `${(imageFile.size / 1024).toFixed(0)} KB`
+                              : `${(imageFile.size / 1024 / 1024).toFixed(1)} MB`) : ''}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full border-2 border-dashed border-gold-500/25 hover:border-gold-500/50 rounded-lg p-8 text-center transition-all group"
+                      >
+                        <div className="text-4xl mb-2 group-hover:scale-110 transition-transform">🖼️</div>
+                        <p className="font-cinzel text-cream/50 text-sm tracking-widest group-hover:text-cream/70 transition-colors">
+                          KLIK UNTUK UPLOAD
+                        </p>
+                        <p className="text-cream/30 text-xs mt-1">JPG, PNG, WEBP — maks. 10 MB</p>
+                      </button>
+                    )}
+                    {/* Upload progress bar */}
+                    {uploadPct > 0 && uploadPct < 100 && (
+                      <div className="mt-2 h-1 bg-crimson-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gold-500 transition-all duration-300 rounded-full"
+                          style={{ width: `${uploadPct}%` }}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-cream/55 text-xs font-cinzel tracking-widest mb-1.5">HARGA AWAL (IDR) *</label>
@@ -245,7 +349,11 @@ export default function AdminPanel() {
                 {fMsg.ok  && <p className="text-green-400 text-sm">{fMsg.ok}</p>}
 
                 <button type="submit" disabled={fBusy} className="btn-gold text-sm tracking-widest">
-                  {fBusy ? 'MENYIMPAN...' : '+ TAMBAH KARYA'}
+                  {fBusy
+                    ? uploadPct > 0
+                      ? `MENGUPLOAD... ${uploadPct}%`
+                      : 'MENYIMPAN...'
+                    : '+ TAMBAH KARYA'}
                 </button>
               </form>
             </div>

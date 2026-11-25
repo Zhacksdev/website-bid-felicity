@@ -91,10 +91,47 @@ ALTER TABLE bids          DISABLE ROW LEVEL SECURITY;
 ALTER TABLE auction_config DISABLE ROW LEVEL SECURITY;
 
 -- ----------------------------------------------------------------
--- Enable Realtime
--- Buka Supabase Dashboard → Database → Replication → enable tables,
--- ATAU jalankan SQL berikut (jika gagal, aktifkan manual di dashboard):
+-- Storage bucket untuk upload gambar karya
 -- ----------------------------------------------------------------
-ALTER PUBLICATION supabase_realtime ADD TABLE artworks;
-ALTER PUBLICATION supabase_realtime ADD TABLE bids;
-ALTER PUBLICATION supabase_realtime ADD TABLE auction_config;
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('artworks', 'artworks', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Siapa saja bisa melihat gambar (public)
+CREATE POLICY "Public read artwork images"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'artworks');
+
+-- Siapa saja bisa upload gambar (cukup untuk event internal)
+CREATE POLICY "Anyone can upload artwork images"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'artworks');
+
+-- Admin bisa hapus gambar (via service role, tidak perlu policy tambahan)
+
+-- ----------------------------------------------------------------
+-- Enable Realtime (aman dijalankan berkali-kali)
+-- ----------------------------------------------------------------
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'artworks'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE artworks;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'bids'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE bids;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'auction_config'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE auction_config;
+  END IF;
+END $$;
