@@ -26,11 +26,20 @@ export async function PUT(request: Request) {
 
   const body = await request.json()
   const db = createServerSupabase()
-  const { data, error } = await db
+
+  // Update the row
+  const { error: updateError } = await db
     .from('auction_config')
     .update(body)
     .eq('id', 1)
-    .select()
+
+  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+
+  // Re-fetch to confirm
+  const { data, error } = await db
+    .from('auction_config')
+    .select('*')
+    .eq('id', 1)
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
