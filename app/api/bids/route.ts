@@ -1,6 +1,25 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase'
 
+// GET /api/bids?ids=id1,id2,id3
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const ids = searchParams.get('ids')?.split(',').filter(Boolean) ?? []
+
+  if (!ids.length) return NextResponse.json([])
+
+  const db = createServerSupabase()
+  const { data, error } = await db
+    .from('bids')
+    .select('*')
+    .in('artwork_id', ids)
+    .order('created_at', { ascending: false })
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data ?? [])
+}
+
+// POST /api/bids
 export async function POST(request: Request) {
   const body = await request.json()
   const { artwork_id, bidder_name, amount } = body

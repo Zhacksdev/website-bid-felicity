@@ -1,80 +1,88 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Artwork, AuctionConfig, Bid } from '@/lib/types'
 import ArtworkCard from './ArtworkCard'
 import Timer from './Timer'
 
-interface Props {
-  initialArtworks: Artwork[]
-  initialConfig: AuctionConfig
-}
+const POLL_MS = 4000
 
-export default function PublicAuction({ initialArtworks, initialConfig }: Props) {
-  const [artworks, setArtworks] = useState<Artwork[]>(initialArtworks)
-  const [config, setConfig]     = useState<AuctionConfig>(initialConfig)
+export default function PublicAuction() {
+  const [artworks, setArtworks] = useState<Artwork[]>([])
+  const [config, setConfig]     = useState<AuctionConfig>({ id: 1, end_time: null, is_running: false })
   const [bids, setBids]         = useState<Record<string, Bid[]>>({})
+  const [loading, setLoading]   = useState(true)
+  const prevArtworkIds          = useRef<string>('')
 
-  const loadBids = useCallback(async (ids: string[]) => {
+  const fetchAll = useCallback(async () => {
+    try {
+      const [artRes, cfgRes] = await Promise.all([
+        fetch('/api/artworks', { cache: 'no-store' }),
+        fetch('/api/timer',    { cache: 'no-store' }),
+      ])
+
+      const [arts, cfg]: [Artwork[], AuctionConfig] = await Promise.all([
+        artRes.json(),
+        cfgRes.json(),
+      ])
+
+      if (Array.isArray(arts)) setArtworks(arts)
+      if (cfg && !cfg.error) setConfig(cfg as AuctionConfig)
+
+      // Fetch bids only when artwork list changes
+      const ids = Array.isArray(arts) ? arts.map((a) => a.id).sort().join(',') : ''
+      if (ids && ids !== prevArtworkIds.current) {
+        prevArtworkIds.current = ids
+        fetchBids(Array.isArray(arts) ? arts.map((a) => a.id) : [])
+      }
+    } catch { /* network error — keep showing last state */ }
+    finally { setLoading(false) }
+  }, [])
+
+  const fetchBids = useCallback(async (ids: string[]) => {
     if (!ids.length) return
-    const { data } = await supabase
-      .from('bids')
-      .select('*')
-      .in('artwork_id', ids)
-      .order('created_at', { ascending: false })
-
-    if (data) {
+    try {
+      const res  = await fetch(`/api/bids?ids=${ids.join(',')}`, { cache: 'no-store' })
+      const data: Bid[] = await res.json()
+      if (!Array.isArray(data)) return
       const grouped: Record<string, Bid[]> = {}
       for (const bid of data) {
         grouped[bid.artwork_id] = grouped[bid.artwork_id] ?? []
-        grouped[bid.artwork_id].push(bid as Bid)
+        grouped[bid.artwork_id].push(bid)
       }
       setBids(grouped)
-    }
+    } catch { /* ignore */ }
   }, [])
 
-  // Initial bids load
+  // Also update bids when artworks current_price changes (new bid landed)
+  const fetchBidsForAll = useCallback(() => {
+    setArtworks((prev) => {
+      if (prev.length) fetchBids(prev.map((a) => a.id))
+      return prev
+    })
+  }, [fetchBids])
+
   useEffect(() => {
-    if (artworks.length) loadBids(artworks.map((a) => a.id))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Realtime subscriptions
-  useEffect(() => {
-    const ch = supabase.channel('public-auction-v1')
-
-    ch.on('postgres_changes', { event: '*', schema: 'public', table: 'artworks' }, (p) => {
-      if (p.eventType === 'INSERT') {
-        setArtworks((prev) => [p.new as Artwork, ...prev])
-        loadBids([p.new.id])
-      } else if (p.eventType === 'UPDATE') {
-        setArtworks((prev) => prev.map((a) => a.id === p.new.id ? p.new as Artwork : a))
-      } else if (p.eventType === 'DELETE') {
-        setArtworks((prev) => prev.filter((a) => a.id !== p.old.id))
-        setBids((prev) => { const n = { ...prev }; delete n[p.old.id]; return n })
-      }
-    })
-
-    ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bids' }, (p) => {
-      const bid = p.new as Bid
-      setBids((prev) => ({
-        ...prev,
-        [bid.artwork_id]: [bid, ...(prev[bid.artwork_id] ?? [])],
-      }))
-    })
-
-    ch.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'auction_config' }, (p) => {
-      setConfig(p.new as AuctionConfig)
-    })
-
-    ch.subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [loadBids])
+    fetchAll()
+    const id = setInterval(fetchAll, POLL_MS)
+    return () => clearInterval(id)
+  }, [fetchAll])
 
   const timerActive =
     config.is_running &&
     !!config.end_time &&
     new Date(config.end_time) > new Date()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 border-2 border-gold-500/30 border-t-gold-500 rounded-full animate-spin mx-auto" />
+          <p className="font-cinzel text-gold-500/50 text-xs tracking-widest">MEMUAT...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen">
@@ -111,8 +119,8 @@ export default function PublicAuction({ initialArtworks, initialConfig }: Props)
       <main className="max-w-6xl mx-auto px-4 pb-20">
         {artworks.length === 0 ? (
           <div className="text-center py-28">
-            <p className="font-cinzel text-gold-500/50 text-2xl tracking-widest">🎨</p>
-            <p className="font-cinzel text-gold-500/50 mt-4 tracking-widest text-sm">KARYA AKAN SEGERA HADIR</p>
+            <p className="text-5xl mb-4">🎨</p>
+            <p className="font-cinzel text-gold-500/50 tracking-widest text-sm">KARYA AKAN SEGERA HADIR</p>
             <p className="font-cormorant text-cream/35 italic mt-2">Pantau terus halaman ini</p>
           </div>
         ) : (
@@ -123,7 +131,7 @@ export default function PublicAuction({ initialArtworks, initialConfig }: Props)
                 artwork={art}
                 bids={bids[art.id] ?? []}
                 timerActive={timerActive}
-                onBidSuccess={() => loadBids(artworks.map((a) => a.id))}
+                onBidSuccess={fetchBidsForAll}
               />
             ))}
           </div>
