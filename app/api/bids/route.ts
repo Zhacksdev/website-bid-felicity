@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/bids?ids=id1,id2,id3
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)

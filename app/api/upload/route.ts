@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
   const adminToken = request.headers.get('x-admin-token')
   if (!adminToken || adminToken !== process.env.ADMIN_SECRET_TOKEN) {
