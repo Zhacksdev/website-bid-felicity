@@ -76,12 +76,13 @@ export default function AdminPanel() {
   const fetchData = useCallback(async () => {
     if (!token) return // wait until token is available via re-render
     try {
-      const [a, c] = await Promise.all([
-        fetch('/api/artworks', { cache: 'no-store' }).then((r) => r.json()),
-        fetch('/api/timer',    { cache: 'no-store' }).then((r) => r.json()),
+      const [artRes, cfgRes] = await Promise.all([
+        fetch('/api/artworks', { cache: 'no-store' }),
+        fetch('/api/timer',    { cache: 'no-store' }),
       ])
+      const [a, c] = await Promise.all([artRes.json(), cfgRes.json()])
       if (Array.isArray(a)) setArtworks(a)
-      if (c && !c.error) setConfig(c as AuctionConfig)
+      if (cfgRes.ok && c) setConfig(c as AuctionConfig)
     } catch { /* ignore */ }
   }, [token])
 

@@ -27,7 +27,7 @@ export default function PublicAuction() {
       ])
 
       if (Array.isArray(arts)) setArtworks(arts)
-      if (cfg && !cfg.error) setConfig(cfg as AuctionConfig)
+      if (cfgRes.ok && cfg) setConfig(cfg as AuctionConfig)
 
       // Fetch bids only when artwork list changes
       const ids = Array.isArray(arts) ? arts.map((a) => a.id).sort().join(',') : ''
