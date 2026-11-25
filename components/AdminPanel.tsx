@@ -186,24 +186,36 @@ export default function AdminPanel() {
   const startTimer = async () => {
     setTMsg('')
     const m = parseInt(mins)
-    if (!m || m < 1) return setTMsg('Durasi minimal 1 menit')
+    if (!m || m < 1) { setTMsg('Durasi minimal 1 menit'); return }
     const end = new Date(Date.now() + m * 60_000).toISOString()
-    const res = await adminFetch('/api/timer', {
-      method: 'PUT',
-      body: JSON.stringify({ end_time: end, is_running: true }),
-    })
-    const d = await res.json()
-    if (res.ok) { setConfig(d); setTMsg('✓ Timer dimulai!') }
-    else setTMsg(d.error ?? 'Gagal')
-    setTimeout(() => setTMsg(''), 3000)
+    try {
+      const res = await adminFetch('/api/timer', {
+        method: 'PUT',
+        body: JSON.stringify({ end_time: end, is_running: true }),
+      })
+      const d = await res.json()
+      if (res.ok) {
+        setConfig(d)
+        setTMsg('✓ Timer dimulai!')
+      } else {
+        setTMsg('Error: ' + (d.error ?? `HTTP ${res.status}`))
+      }
+    } catch (e: unknown) {
+      setTMsg('Koneksi gagal: ' + (e instanceof Error ? e.message : 'unknown'))
+    }
+    setTimeout(() => setTMsg(''), 5000)
   }
 
   const stopTimer = async () => {
-    const res = await adminFetch('/api/timer', {
-      method: 'PUT',
-      body: JSON.stringify({ is_running: false, end_time: null }),
-    })
-    if (res.ok) setConfig(await res.json())
+    try {
+      const res = await adminFetch('/api/timer', {
+        method: 'PUT',
+        body: JSON.stringify({ is_running: false, end_time: null }),
+      })
+      if (res.ok) setConfig(await res.json())
+      else setTMsg('Gagal stop timer')
+    } catch { setTMsg('Koneksi gagal') }
+    setTimeout(() => setTMsg(''), 3000)
   }
 
   const extendTimer = async (m: number) => {
