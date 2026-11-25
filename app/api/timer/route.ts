@@ -27,19 +27,11 @@ export async function PUT(request: Request) {
   const body = await request.json()
   const db = createServerSupabase()
 
-  // Update the row
-  const { error: updateError } = await db
-    .from('auction_config')
-    .update(body)
-    .eq('id', 1)
-
-  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
-
-  // Re-fetch to confirm
+  // Upsert — works even if anon role has INSERT but not UPDATE
   const { data, error } = await db
     .from('auction_config')
-    .select('*')
-    .eq('id', 1)
+    .upsert({ id: 1, ...body }, { onConflict: 'id' })
+    .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
