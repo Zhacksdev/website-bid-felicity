@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-crimson-950 text-cream antialiased;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(90,10,10,0.6) 0%, transparent 65%),
+      radial-gradient(ellipse 60% 40% at 50% 100%, rgba(201,168,76,0.04) 0%, transparent 60%);
+    min-height: 100vh;
+  }
+  * { box-sizing: border-box; }
+}
+
+@layer components {
+  .gold-text {
+    @apply bg-gradient-to-r from-gold-300 via-gold-500 to-gold-300 bg-clip-text text-transparent;
+  }
+
+  .card {
+    @apply bg-crimson-900/80 border border-gold-500/25 rounded-xl backdrop-blur-sm;
+  }
+
+  .btn-gold {
+    @apply bg-gradient-to-r from-gold-600 to-gold-500 hover:from-gold-500 hover:to-gold-400
+           text-crimson-950 font-cinzel font-bold tracking-wider
+           px-5 py-2.5 rounded-lg transition-all duration-200
+           hover:shadow-lg hover:shadow-gold-500/25 active:scale-95
+           disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+
+  .btn-outline {
+    @apply border border-gold-500/40 text-gold-400 hover:bg-gold-500/10
+           font-cinzel tracking-wider px-5 py-2.5 rounded-lg
+           transition-all duration-200 active:scale-95
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .btn-danger {
+    @apply border border-red-500/30 text-red-400/70 hover:text-red-400 hover:border-red-500/60
+           font-cinzel text-xs tracking-wider px-3 py-1.5 rounded
+           transition-all duration-200;
+  }
+
+  .field {
+    @apply bg-crimson-800/60 border border-gold-500/25 rounded-lg px-3 py-2.5
+           text-cream placeholder-cream/30 focus:outline-none focus:border-gold-500/60
+           transition-colors w-full;
+  }
+
+  .divider {
+    @apply flex items-center gap-3;
+  }
+  .divider::before,
+  .divider::after {
+    content: '';
+    @apply flex-1 h-px;
+    background: linear-gradient(to right, transparent, theme('colors.gold.500' / 40%), transparent);
+  }
+}
+
+::-webkit-scrollbar       { width: 5px; }
+::-webkit-scrollbar-track { background: #120000; }
+::-webkit-scrollbar-thumb { background: rgba(201,168,76,.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,.55); }
